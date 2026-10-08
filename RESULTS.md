@@ -43,6 +43,11 @@ EVOLUTION
   t5     100.02    300   100.03    900  100.0250  0.0100  100.0225  -0.5000  +0.0000  -0.3571
   t6     100.02    100   100.03    900  100.0250  0.0100  100.0210  -0.8000  +0.0000  -0.3000
   t7     100.01    600   100.03    900  100.0200  0.0200  100.0180  -0.2000  -0.0050  +0.6000
+
+BENCHMARK
+  Loop + Compute : 2.07 ns/op
+  Loop Baseline  : 0.52 ns/op
+  Compute Alone  : ~1.55 ns/op
 ```
 
 ## How Mid and OBI evolve
@@ -64,3 +69,20 @@ of the way back from t5 to t7.
 
 
 Observation: OBI moves first in both directions before we see changes in the mid price.
+
+## Latency of `compute()`
+
+The benchmark and the way it is reported are taken from the professor's answer on Ed
+Discussion. The recipe:
+
+- **Time the whole batch**
+- **Measure the loop and subtract it.**
+- **Do initial run first, repeat, take the median.**
+
+| Measurement    | ns/op |
+|----------------|------:|
+| Loop + Compute |  2.07 |
+| Loop Baseline  |  0.52 |
+| Compute Alone  | ~1.55 |
+
+Machine: Ubuntu 26.04.1 LTS under WSL, g++ 15.2.0, `-O2`.

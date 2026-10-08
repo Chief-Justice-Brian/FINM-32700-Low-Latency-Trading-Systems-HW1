@@ -6,6 +6,8 @@
 // Windows PowerShell:
 //     g++ -std=c++20 -O2 -Wall -Wextra hw1.cpp -o hw1.exe; ./hw1.exe
 
+#include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <limits>
@@ -136,6 +138,77 @@ static void run_checks() {
 }
 
 // ===========================================================================
+//  Benchmark
+// ===========================================================================
+
+template <class T> static void doNotOptimize(T&& v) {
+    // Tell the compiler that v is actually being used.
+    // This prevents it from optimizing away the work that produced v
+    asm volatile("" : : "g"(v) : "memory");
+}
+
+// Method from the instructor's answer on Ed Discussion, "Measuring latency #16".
+static void run_benchmark() {
+    // Test Data
+    std::vector<TopOfBookSnapshot> snapshots(4096);
+
+    for (std::size_t i = 0; i < snapshots.size(); i++) {
+        const double bid = 100.00 + 0.01 * (i % 5);
+        snapshots[i] = {bid, 100.0 + i % 900, bid + 0.01 * (1 + i % 3), 100.0 + (i * 7) % 900};
+    }
+
+    const long N = 10'000'000;
+
+    // Lambda (anonymous function)
+    // [&] lets the lambda access variables from
+    // the surrounding function by reference
+    auto run = [&](bool is_compute_enabled) {
+        double sink = 0.0;
+
+        // Time the whole batch, rather than each call.
+        const auto start = std::chrono::steady_clock::now();
+
+        for (long i = 0; i < N; i++) {
+            const TopOfBookSnapshot& s = snapshots[i & 4095];
+
+            if (is_compute_enabled) {
+                const Metrics m = compute(s);
+                sink += m.micro + m.obi;
+            } else {
+                // Same loop and basic loads, without the cost of compute
+                sink += s.bid_px + s.ask_sz;
+            }
+        }
+
+        const auto end = std::chrono::steady_clock::now();
+        doNotOptimize(sink); // keep the result alive
+        return std::chrono::duration<double, std::nano>(end - start).count() / N;
+    };
+
+    // Warm up once, then 9 runs. Helps reduce noisy results
+    auto median = [&](bool is_compute_enabled) {
+        run(is_compute_enabled);
+
+        std::vector<double> v;
+
+        for (int r = 0; r < 9; r++) {
+            v.push_back(run(is_compute_enabled));
+        }
+        std::sort(v.begin(), v.end());
+
+        // Consider this the middle value for 9 results
+        return v[4];
+    };
+
+    // compute alone = (loop + compute) - (loop alone)
+    const double with = median(true);
+    const double base = median(false);
+    std::printf("  Loop + Compute : %.2f ns/op\n", with);
+    std::printf("  Loop Baseline  : %.2f ns/op\n", base);
+    std::printf("  Compute Alone  : ~%.2f ns/op\n", with - base);
+}
+
+// ===========================================================================
 //  main
 // ===========================================================================
 
@@ -155,6 +228,9 @@ int main() {
 
     std::printf("\nEVOLUTION\n");
     print_evolution(sequence);
+
+    std::printf("\nBENCHMARK\n");
+    run_benchmark();
 
     return 0;
 }
